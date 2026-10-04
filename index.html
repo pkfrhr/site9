@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Найди пару</title>
+<style>
+  :root{
+    --bg:#c8c4be;
+    --tile:#3a3b45;
+    --tile-icon:#585a66;
+    --open:#f8f5ef;
+    --glow:#7cf25a;
+    --empty:rgba(255,255,255,.18);
+    --size:min(26vw,100px);
+    --gap:min(3.2vw,13px);
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+    display:flex;flex-direction:column;align-items:center;
+    overflow:hidden;user-select:none;-webkit-user-select:none;
+  }
+  .top{margin-top:22px;position:relative;flex:none;z-index:5}
+  .avatar{
+    width:46px;height:46px;border-radius:50%;
+    border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.18);
+    background:radial-gradient(circle at 30% 30%,#ff6bd5,#7b3cff 45%,#1fb5ff 80%);
+    position:relative;z-index:5;flex:none;
+  }
+  .avatar.photo::after{display:none}
+  .avatar::after{ /* простое лицо */
+    content:"";position:absolute;inset:9px 11px 7px;border-radius:50% 50% 45% 45%;
+    background:#f1c7a3;box-shadow:inset 0 -3px 0 rgba(0,0,0,.08);
+  }
+  .avatar.bump{animation:bump .35s ease}
+  @keyframes bump{40%{transform:scale(1.22)}100%{transform:scale(1)}}
+
+  .basket{
+    position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);
+    width:46px;height:46px;border-radius:50%;border:2.5px solid #fff;
+    background:#f8f5ef;box-shadow:0 2px 8px rgba(0,0,0,.18);
+    padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .basket svg{width:30px;height:30px}
+  .basket:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .basket.bump{animation:bumpB .35s ease}
+  @keyframes bumpB{40%{transform:translateY(-50%) scale(1.25)}100%{transform:translateY(-50%) scale(1)}}
+  .basket.nope{animation:nope .35s ease}
+  @keyframes nope{25%{transform:translateY(-50%) rotate(-12deg)}75%{transform:translateY(-50%) rotate(12deg)}}
+  .badge{
+    position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;
+    border-radius:10px;background:#ff3b5c;color:#fff;font:700 12px/20px inherit;font-family:inherit;
+    border:2px solid #fff;transform:scale(0);transition:transform .25s cubic-bezier(.3,1.6,.5,1)
+  }
+  .badge.on{transform:scale(1)}
+
+  /* доставка */
+  .stage{position:fixed;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+  .road{
+    position:absolute;left:0;right:0;bottom:calc(8% + env(safe-area-inset-bottom,0px));height:70px;
+    background:#55575f;opacity:0;transition:opacity .3s
+  }
+  .road::after{content:"";position:absolute;left:0;right:0;top:33px;height:4px;
+    background:repeating-linear-gradient(90deg,#f0eee9 0 26px,transparent 26px 52px)}
+  .stage.on .road{opacity:1}
+  .truck{position:absolute;bottom:calc(8% + 30px + env(safe-area-inset-bottom,0px));left:0;width:170px;height:100px}
+  .truck svg{width:100%;height:100%;overflow:visible}
+  .truck .wheel{transform-box:fill-box;transform-origin:center;animation:spin .4s linear infinite}
+  .truck.parked .wheel{animation-play-state:paused}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .truck .body{animation:rumble .25s ease-in-out infinite alternate}
+  @keyframes rumble{to{transform:translateY(-1.5px)}}
+  .puff{position:absolute;width:14px;height:14px;border-radius:50%;background:#efede8;opacity:.9;
+    animation:puff .7s ease-out forwards}
+  @keyframes puff{to{transform:translate(-40px,-14px) scale(2.4);opacity:0}}
+  .toast{
+    position:fixed;left:50%;bottom:calc(8% + 100px + env(safe-area-inset-bottom,0px));z-index:21;
+    transform:translate(-50%,10px);opacity:0;transition:.3s;
+    background:#3a3b45;color:#fff;font-weight:600;font-size:15px;padding:12px 18px;border-radius:14px;white-space:nowrap
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  .grid{
+    margin-top:34px;
+    display:grid;grid-template-columns:repeat(3,var(--size));gap:var(--gap);
+  }
+  .card{
+    width:var(--size);height:var(--size);border-radius:22%;
+    background:var(--tile);border:none;padding:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    position:relative;
+    transition:background .18s,box-shadow .25s,transform .15s;
+  }
+  .card:active{transform:scale(.95)}
+  .card:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .card .back{width:42%;height:42%;fill:var(--tile-icon);transition:opacity .12s}
+  .card .face{position:absolute;inset:12%;opacity:0;transform:scale(.6);transition:opacity .15s,transform .22s cubic-bezier(.3,1.6,.5,1)}
+  .card .face svg{width:100%;height:100%}
+  .card.open{background:var(--open);animation:pop .25s ease}
+  .card.open .back{opacity:0}
+  .card.open .face{opacity:1;transform:scale(1)}
+  @keyframes pop{50%{transform:scale(1.06)}}
+  .card.match{background:#eaf7e2;box-shadow:0 0 0 3px rgba(124,242,90,.55),0 0 22px 6px var(--glow)}
+  .card.wrong{animation:shake .32s ease}
+  @keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .card.gone{background:var(--empty);box-shadow:none;cursor:default;pointer-events:none}
+  .card.gone .face,.card.gone .back{opacity:0}
+
+  .fly{position:fixed;z-index:10;pointer-events:none;
+    transition:transform .6s cubic-bezier(.5,-.3,.6,1),opacity .6s ease}
+
+  .done{
+    margin-top:30px;opacity:0;transform:translateY(8px);transition:.3s;pointer-events:none;text-align:center;color:#3a3b45
+  }
+  .done.show{opacity:1;transform:none;pointer-events:auto}
+  .done p{margin:0 0 12px;font-size:17px;font-weight:600}
+  .done button{
+    border:none;border-radius:14px;background:var(--tile);color:#fff;
+    font:600 16px/1 inherit;padding:14px 22px;cursor:pointer;font-family:inherit
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition-duration:.01s!important}}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="avatar" id="avatar" aria-label="Профиль"></div>
+    <button class="basket" id="basket" aria-label="Корзина: 0 предметов">
+      <svg viewBox="0 0 32 32">
+        <path d="M10 13l5-8M22 13l-5-8" stroke="#8a5a2b" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <path d="M4 13h24l-2.6 13.2A2.4 2.4 0 0 1 23 28H9a2.4 2.4 0 0 1-2.4-1.8z" fill="#d89a4e"/>
+        <path d="M3 12h26v3.4H3z" fill="#b97a35" rx="1"/>
+        <path d="M11 18v6M16 18v6M21 18v6" stroke="#a9692a" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="badge" id="badge">0</span>
+    </button>
+  </div>
+  <div class="grid" id="grid" role="grid" aria-label="Игровое поле"></div>
+  <div class="stage" id="stage"><div class="road"></div></div>
+  <div class="done" id="done"><p>Все пары найдены</p><button id="again">Играть снова</button></div>
+
+<script>
+/* ===== СВОИ КАРТИНКИ =====
+   Вставь ссылку или путь к файлу (например "img/phone.png" или data:URI).
+   Пустая строка = используется встроенная иконка. */
+const CUSTOM = {
+  avatar: "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Cdefs%3E%3CradialGradient%20id%3D%22b%22%20cx%3D%22.3%22%20cy%3D%22.25%22%20r%3D%22.9%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ff6bd5%22/%3E%3Cstop%20offset%3D%22.5%22%20stop-color%3D%22%237b3cff%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%231fb5ff%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20fill%3D%22url%28%23b%29%22/%3E%3Cpath%20d%3D%22M22%20100c2-18%2014-26%2028-26s26%208%2028%2026z%22%20fill%3D%22%23ffb627%22/%3E%3Cpath%20d%3D%22M42%2070h16v10a8%208%200%200%201-16%200z%22%20fill%3D%22%23e9a77c%22/%3E%3Cellipse%20cx%3D%2250%22%20cy%3D%2250%22%20rx%3D%2221%22%20ry%3D%2224%22%20fill%3D%22%23f4c19a%22/%3E%3Cellipse%20cx%3D%2229%22%20cy%3D%2252%22%20rx%3D%224%22%20ry%3D%226%22%20fill%3D%22%23e9a77c%22/%3E%3Cellipse%20cx%3D%2271%22%20cy%3D%2252%22%20rx%3D%224%22%20ry%3D%226%22%20fill%3D%22%23e9a77c%22/%3E%3Cpath%20d%3D%22M28%2046c-2-18%2010-27%2023-27%2014%200%2024%209%2021%2027-3-8-9-13-17-14-7%206-18%208-27%2014z%22%20fill%3D%22%233b2418%22/%3E%3Cellipse%20cx%3D%2242%22%20cy%3D%2251%22%20rx%3D%223%22%20ry%3D%223.8%22%20fill%3D%22%232a1a12%22/%3E%3Cellipse%20cx%3D%2258%22%20cy%3D%2251%22%20rx%3D%223%22%20ry%3D%223.8%22%20fill%3D%22%232a1a12%22/%3E%3Ccircle%20cx%3D%2243%22%20cy%3D%2249.6%22%20r%3D%221%22%20fill%3D%22%23fff%22/%3E%3Ccircle%20cx%3D%2259%22%20cy%3D%2249.6%22%20r%3D%221%22%20fill%3D%22%23fff%22/%3E%3Cpath%20d%3D%22M37%2044q5-3%209%200M54%2044q5-3%209%200%22%20stroke%3D%22%233b2418%22%20stroke-width%3D%222%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3Cellipse%20cx%3D%2236%22%20cy%3D%2260%22%20rx%3D%224%22%20ry%3D%222.5%22%20fill%3D%22%23ff8f8f%22%20opacity%3D%22.5%22/%3E%3Cellipse%20cx%3D%2264%22%20cy%3D%2260%22%20rx%3D%224%22%20ry%3D%222.5%22%20fill%3D%22%23ff8f8f%22%20opacity%3D%22.5%22/%3E%3Cpath%20d%3D%22M42%2062q8%207%2016%200%22%20stroke%3D%22%237a3a2a%22%20stroke-width%3D%222.4%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E", // мультяшный аватар
+  back:   "",        // иконка на рубашке карточек
+  items: {           // картинки для 6 пар
+    phone: "https://i.pinimg.com/736x/40/32/d2/4032d2bcb2534d48862f728a5b1da463.jpg",
+    laptop: "https://i.pinimg.com/736x/8a/88/70/8a887038c9396e756b107975628f60ce.jpg",
+    headphones: "https://i.pinimg.com/736x/a9/83/0f/a9830f254564f08af93b4ed9048792d7.jpg",
+    watch: "https://i.pinimg.com/736x/d7/fc/3f/d7fc3fe1a94e79432bf77fececd56ccc.jpg",
+    camera: "https://i.pinimg.com/736x/90/d2/a2/90d2a2abe55b4fba0b7108a4ba4993de.jpg",
+    gamepad: "https://i.pinimg.com/1200x/44/af/5a/44af5a4b0001ed01b6ad9172ac367633.jpg"
+  }
+};
+/* ========================= */
+
+const BACK = '<svg class="back" viewBox="0 0 24 24"><path d="M12 2.5c.6 0 1 .4 1.2 1l1.5 4.6 4.8.2c1.1 0 1.6 1.4.7 2.1l-3.8 3 1.3 4.6c.3 1.1-.9 2-1.8 1.3L12 16.6l-3.9 2.7c-.9.7-2.1-.2-1.8-1.3l1.3-4.6-3.8-3c-.9-.7-.4-2.1.7-2.1l4.8-.2 1.5-4.6c.2-.6.6-1 1.2-1z"/></svg>';
+
+const ITEMS = {
+  phone:`<svg viewBox="0 0 64 64"><defs><linearGradient id="gp" x1="0" x2="1"><stop offset="0" stop-color="#f0934a"/><stop offset="1" stop-color="#d9692a"/></linearGradient></defs>
+    <rect x="18" y="4" width="28" height="56" rx="6" fill="url(#gp)"/><rect x="21" y="8" width="13" height="13" rx="4" fill="#c25a22"/>
+    <circle cx="27.5" cy="14.5" r="3.6" fill="#2b2b30"/><circle cx="27.5" cy="14.5" r="1.4" fill="#556"/><circle cx="32" cy="38" r="7" fill="none" stroke="#e8823e" stroke-width="1.5"/></svg>`,
+  laptop:`<svg viewBox="0 0 64 64"><defs><linearGradient id="gl" y1="0" y2="1" x1="0" x2="0"><stop offset="0" stop-color="#e6e8ec"/><stop offset="1" stop-color="#b9bdc4"/></linearGradient></defs>
+    <path d="M12 14h40a3 3 0 0 1 3 3v24H9V17a3 3 0 0 1 3-3z" fill="url(#gl)"/><rect x="12" y="17" width="40" height="21" rx="1" fill="#2c2f36"/>
+    <path d="M14 19l20 17H14z" fill="#3b3f48"/><path d="M4 43h56l-3 5H7z" fill="#cfd2d8"/><rect x="27" y="43" width="10" height="2" rx="1" fill="#9ca1a9"/></svg>`,
+  headphones:`<svg viewBox="0 0 64 64"><path d="M12 38V30a20 20 0 0 1 40 0v8" fill="none" stroke="#3c7cf0" stroke-width="5" stroke-linecap="round"/>
+    <rect x="7" y="34" width="13" height="20" rx="6" fill="#2f5fd0"/><rect x="44" y="34" width="13" height="20" rx="6" fill="#2f5fd0"/>
+    <rect x="10" y="38" width="7" height="12" rx="3.5" fill="#6aa0ff"/><rect x="47" y="38" width="7" height="12" rx="3.5" fill="#6aa0ff"/></svg>`,
+  watch:`<svg viewBox="0 0 64 64"><rect x="22" y="2" width="20" height="16" rx="4" fill="#7fbf7f"/><rect x="22" y="46" width="20" height="16" rx="4" fill="#7fbf7f"/>
+    <rect x="15" y="14" width="34" height="36" rx="10" fill="#2a2a30"/><rect x="19" y="18" width="26" height="28" rx="7" fill="#0f1218"/>
+    <circle cx="32" cy="32" r="8" fill="none" stroke="#5ae07a" stroke-width="3" stroke-dasharray="36 50" stroke-linecap="round" transform="rotate(-90 32 32)"/><rect x="49" y="25" width="3" height="8" rx="1.5" fill="#55565e"/></svg>`,
+  camera:`<svg viewBox="0 0 64 64"><path d="M22 14h20l3 6h9a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V24a4 4 0 0 1 4-4h9z" fill="#2e2f35"/>
+    <circle cx="32" cy="36" r="12" fill="#484a52"/><circle cx="32" cy="36" r="8" fill="#14161b"/><circle cx="29" cy="33" r="2.5" fill="#6d7bff" opacity=".8"/>
+    <rect x="46" y="24" width="6" height="3" rx="1.5" fill="#f2c94c"/></svg>`,
+  gamepad:`<svg viewBox="0 0 64 64"><path d="M18 20h28c8 0 12 8 13 18 1 8-5 12-9 7l-5-6H19l-5 6c-4 5-10 1-9-7 1-10 5-18 13-18z" fill="#e85d75"/>
+    <rect x="15" y="27" width="10" height="3.5" rx="1.5" fill="#fff"/><rect x="18.2" y="23.7" width="3.5" height="10" rx="1.5" fill="#fff"/>
+    <circle cx="44" cy="26" r="2.6" fill="#fff"/><circle cx="49" cy="31" r="2.6" fill="#fff"/><circle cx="39" cy="31" r="2.6" fill="#fff"/><circle cx="44" cy="36" r="2.6" fill="#fff"/></svg>`
+};
+
+const grid = document.getElementById('grid');
+const avatar = document.getElementById('avatar');
+const done = document.getElementById('done');
+let first = null, lock = false, found = 0, delivering = false;
+const collected = [];
+const basket = document.getElementById('basket');
+const badge = document.getElementById('badge');
+const ORDER = Object.keys(ITEMS); // порядок картинок: пара 1, пара 2, ...
+
+const imgTag = (src,cls='') => `<img src="${src}" alt="" class="${cls}" style="width:100%;height:100%;object-fit:contain;display:block;border-radius:10px" draggable="false">`;
+if (CUSTOM.avatar) {
+  avatar.style.background = `center/cover no-repeat url("${CUSTOM.avatar}")`;
+  avatar.classList.add('photo');
+}
+const BACK_HTML = CUSTOM.back
+  ? `<div class="back" style="width:46%;height:46%">${imgTag(CUSTOM.back)}</div>` : BACK;
+const faceHTML = key => CUSTOM.items[key] ? imgTag(CUSTOM.items[key]) : ITEMS[key];
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+
+function build(){
+  grid.innerHTML=''; first=null; lock=false; found=0; done.classList.remove('show');
+  for(let i=0;i<12;i++){
+    const b=document.createElement('button');
+    b.className='card';
+    b.setAttribute('aria-label','Закрытая карточка '+(i+1));
+    b.innerHTML=BACK_HTML+'<div class="face"></div>';
+    b.addEventListener('click',()=>flip(b));
+    grid.appendChild(b);
+  }
+}
+
+function flip(c){
+  if(lock||c===first||c.classList.contains('open')||c.classList.contains('gone')) return;
+  // каждая открытая карточка показывает текущую картинку — любые две подряд совпадают
+  const key = ORDER[found % ORDER.length];
+  c.dataset.key = key;
+  c.querySelector('.face').innerHTML = faceHTML(key);
+  c.classList.add('open');
+  if(!first){first=c;return}
+  const a=first; first=null; lock=true;
+  if(a.dataset.key===c.dataset.key){
+    setTimeout(()=>{a.classList.add('match');c.classList.add('match')},250);
+    setTimeout(()=>{flyToAvatar(a);flyToAvatar(c,true)},900);
+  }else{
+    setTimeout(()=>{a.classList.add('wrong');c.classList.add('wrong')},450);
+    setTimeout(()=>{[a,c].forEach(x=>x.classList.remove('open','wrong'));lock=false},850);
+  }
+}
+
+function flyToAvatar(card,last){
+  const face=card.querySelector('.face');
+  const r=face.getBoundingClientRect(), t=basket.getBoundingClientRect();
+  const clone=face.cloneNode(true);
+  clone.className='fly';
+  Object.assign(clone.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});
+  document.body.appendChild(clone);
+  card.classList.remove('match','open'); card.classList.add('gone');
+  card.setAttribute('aria-label','Пара найдена');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const dx=t.left+t.width/2-(r.left+r.width/2), dy=t.top+t.height/2-(r.top+r.height/2);
+    clone.style.transform=`translate(${dx}px,${dy}px) scale(.45) rotate(${last?18:-18}deg)`;
+    clone.style.opacity='0.2';
+  }));
+  setTimeout(()=>{
+    clone.remove();
+    basket.classList.remove('bump'); void basket.offsetWidth; basket.classList.add('bump');
+    if(last){collected.push(card.dataset.key);updateBadge();found++;lock=false;if(found===6)setTimeout(()=>done.classList.add('show'),300)}
+  },600);
+}
+
+function updateBadge(){
+  badge.textContent=collected.length;
+  badge.classList.toggle('on',collected.length>0);
+  basket.setAttribute('aria-label','Корзина: '+collected.length+' предметов');
+}
+
+const TRUCK = `<svg viewBox="0 0 170 100"><g class="body">
+  <rect x="4" y="10" width="104" height="62" rx="8" fill="#2fb36b"/>
+  <rect x="4" y="10" width="104" height="10" rx="5" fill="#27985a"/>
+  <g transform="translate(40 30)"><path d="M0 8l16-8 16 8v18l-16 8-16-8z" fill="#f8f5ef"/><path d="M0 8l16 8 16-8M16 16v18" stroke="#2fb36b" stroke-width="2" fill="none"/></g>
+  <path d="M112 30h26c4 0 7 2 9 5l14 18c1.5 2 2 4 2 6v13h-51z" fill="#26a05f"/>
+  <path d="M120 36h17c2 0 3.5 1 4.5 2.5l9 13h-30.5z" fill="#bfe6ff"/>
+  <rect x="156" y="62" width="9" height="6" rx="2" fill="#ffd25a"/>
+  <rect x="0" y="70" width="166" height="8" rx="3" fill="#3b3d45"/>
+  <rect x="112" y="56" width="10" height="3" rx="1.5" fill="#1d7f4a"/></g>
+  <g class="wheel"><circle cx="34" cy="80" r="13" fill="#25262c"/><circle cx="34" cy="80" r="5.5" fill="#c9cbd1"/><rect x="32.5" y="69" width="3" height="6" fill="#55575f"/></g>
+  <g class="wheel"><circle cx="136" cy="80" r="13" fill="#25262c"/><circle cx="136" cy="80" r="5.5" fill="#c9cbd1"/><rect x="134.5" y="69" width="3" height="6" fill="#55575f"/></g>
+</svg>`;
+
+const wait = ms => new Promise(r=>setTimeout(r,ms));
+
+async function deliver(){
+  if(delivering) return;
+  if(!collected.length || lock){
+    basket.classList.remove('nope'); void basket.offsetWidth; basket.classList.add('nope'); return;
+  }
+  delivering = true;
+  const stage=document.getElementById('stage');
+  const truck=document.createElement('div'); truck.className='truck'; truck.innerHTML=TRUCK;
+  stage.appendChild(truck); stage.classList.add('on');
+  const W=innerWidth, tw=170, stop=(W-tw)/2;
+
+  // заезд
+  await truck.animate([{transform:`translateX(${-tw-20}px)`},{transform:`translateX(${stop+12}px)`,offset:.85},{transform:`translateX(${stop}px)`}],
+    {duration:1100,easing:'cubic-bezier(.2,.7,.3,1)',fill:'forwards'}).finished;
+  truck.classList.add('parked');
+
+  // предметы прыгают из корзины в кузов
+  const b=basket.getBoundingClientRect(), tr=truck.getBoundingClientRect();
+  const items=collected.splice(0);
+  await Promise.all(items.map((key,i)=>new Promise(async res=>{
+    await wait(i*160);
+    const el=document.createElement('div');
+    el.innerHTML=faceHTML(key);
+    Object.assign(el.style,{position:'fixed',left:b.left+'px',top:b.top+'px',width:b.width+'px',height:b.height+'px',zIndex:22});
+    el.firstElementChild.style.width='100%';el.firstElementChild.style.height='100%';
+    document.body.appendChild(el);
+    badge.textContent=items.length-i-1; badge.classList.toggle('on',items.length-i-1>0);
+    const dx=tr.left+tw*0.32-b.left-b.width/2+ (i%3-1)*10, dy=tr.top+35-b.top-b.height/2;
+    const midY=Math.min(-60,dy*0.2-80);
+    await el.animate([
+      {transform:'translate(0,0) scale(1)'},
+      {transform:`translate(${dx*.5}px,${dy*.5+midY}px) scale(1.1) rotate(${i%2?20:-20}deg)`,offset:.5},
+      {transform:`translate(${dx}px,${dy}px) scale(.35)`,opacity:.3}
+    ],{duration:650,easing:'ease-in',fill:'forwards'}).finished;
+    el.remove();
+    truck.animate([{transform:`translateX(${stop}px) translateY(0)`},{transform:`translateX(${stop}px) translateY(4px)`},{transform:`translateX(${stop}px) translateY(0)`}],{duration:220,fill:'forwards'});
+    res();
+  })));
+  updateBadge();
+  await wait(250);
+
+  // уезжает
+  truck.classList.remove('parked');
+  const puffs=setInterval(()=>{
+    const r=truck.getBoundingClientRect(), p=document.createElement('div');
+    p.className='puff'; p.style.left=(r.left-6)+'px'; p.style.top=(r.top+62)+'px'; p.style.position='fixed';
+    stage.appendChild(p); setTimeout(()=>p.remove(),700);
+  },90);
+  await truck.animate([{transform:`translateX(${stop}px)`},{transform:`translateX(${stop-10}px)`,offset:.12},{transform:`translateX(${W+40}px)`}],
+    {duration:1200,easing:'cubic-bezier(.6,0,.8,.6)',fill:'forwards'}).finished;
+  clearInterval(puffs);
+  await wait(700);
+  stage.classList.remove('on');
+  await wait(300); truck.remove(); delivering=false;
+}
+basket.addEventListener('click',deliver);
+
+document.getElementById('again').addEventListener('click',build);
+build();
+</script>
+</body>
+</html>
